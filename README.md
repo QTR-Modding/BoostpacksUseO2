@@ -30,12 +30,16 @@ O2 below it.
 - [Starfield Script Extender 0.2.21](https://sfse.silverlock.org/)
 - [Address Library for SFSE Plugins v22](https://www.nexusmods.com/starfield/mods/3256)
 
+[SFSE Menu Framework](https://github.com/QTR-Modding/SFSE-Menu-Framework)
+adds the optional in-game settings page. The plugin and its INI continue to
+work when the framework is absent.
+
 The native hooks and ABIs are runtime-specific. Windows Store and Game Pass
 versions are not supported by SFSE.
 
 ## Installation
 
-Install `BoostpacksUseO2-v0.4.1.zip` with a mod manager, or copy the archive's
+Install `BoostpacksUseO2-v0.5.0.zip` with a mod manager, or copy the archive's
 `SFSE` folder into the game's `Data` folder. Launch Starfield through SFSE.
 
 The installed files are:
@@ -55,8 +59,9 @@ zero. This plugin provides the hold-compatible no-magic behavior.
 
 ## Configuration
 
-Edit `Data/SFSE/Plugins/O2BoostRecharge.ini` before launching the game. Settings
-are read once after game data loads; there is no hot reload.
+Edit `Data/SFSE/Plugins/O2BoostRecharge.ini`, or use the optional in-game page
+under **Boostpacks Use O2 > Settings**. Menu changes apply immediately; press
+**Save** to keep them after restart.
 
 | Setting | Default | Meaning |
 |---|---:|---|
@@ -105,10 +110,13 @@ The validated dependency revisions are:
 
 - CommonLibSF `84f8589b15a6d588d28da16baa7459a1fc414ea7`
 - commonlib-shared `40bdbcaf8fa691ee6daadc7b5cea8d43f794bef4`
+- SFSE-MCP `a604d76a750939321640d8f6325d90bee858c03f`
 - spdlog v1.16.0 (`486b55554f11c9cccc913e11a87085b2a91f706f`)
 
 The build requires Xmake 3.0.8 or newer, MSVC with C++23 support, and the Windows
-SDK. See [SOURCE.md](SOURCE.md) for corresponding-source details.
+SDK. Set `SFSEMCP_PATH` to the pinned SFSE-MCP checkout until it is available
+as the repository's `lib/sfse-mcp` submodule. See [SOURCE.md](SOURCE.md) for
+corresponding-source details.
 
 ## License
 
@@ -118,7 +126,7 @@ and [EXCEPTIONS](EXCEPTIONS).
 
 ## Credits
 
-- Quant / QTR Modding
+- Quantumyilmaz
 - CommonLibSF and commonlib-shared maintainers and contributors
 - Ian Patterson and SFSE contributors
 - meh321 for Address Library for SFSE Plugins

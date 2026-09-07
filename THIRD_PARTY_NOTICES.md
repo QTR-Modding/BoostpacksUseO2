@@ -32,4 +32,11 @@ license. The notice is reproduced in `LICENSES/CommonLibSSE-MIT.txt`.
 - License: MIT
 - License file: `LICENSES/spdlog-MIT.txt`
 
+## SFSE-MCP
+
+- Project: <https://github.com/QTR-Modding/SFSE-MCP>
+- Revision: `a604d76a750939321640d8f6325d90bee858c03f`
+- License: MIT
+- License file: `LICENSES/SFSE-MCP-MIT.txt`
+
 No files, code, or assets from Real O2 or Magic Boost Disabler are included.

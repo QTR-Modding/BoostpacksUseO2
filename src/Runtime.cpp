@@ -1,138 +1,10 @@
-#include "pch.h"
+#include "RechargeMath.h"
+#include "Runtime.h"
+#include "Settings.h"
 
-namespace Settings
-{
-    constexpr float kDefaultO2PerFuel = 1.0F;
-    constexpr float kMinO2PerFuel = 0.001F;
-    constexpr float kMaxO2PerFuel = 1000.0F;
-    constexpr float kDefaultMinimumO2ReservePercent = 20.0F;
-    constexpr float kMaxMinimumO2ReservePercent = 100.0F;
-
-    float o2PerFuel = kDefaultO2PerFuel;
-    float minimumO2ReservePercent = kDefaultMinimumO2ReservePercent;
-    bool freeInSealedOrBreathable = true;
-    bool disableBoostWhenSuitHidden = true;
-    bool debugLogging = false;
-
-    std::string Trim(std::string a_value)
-    {
-        auto isSpace = [](unsigned char a_char) { return std::isspace(a_char) != 0; };
-        a_value.erase(a_value.begin(), std::find_if_not(a_value.begin(), a_value.end(), isSpace));
-        a_value.erase(std::find_if_not(a_value.rbegin(), a_value.rend(), isSpace).base(), a_value.end());
-        return a_value;
-    }
-
-    std::string Lower(std::string a_value)
-    {
-        std::transform(
-            a_value.begin(),
-            a_value.end(),
-            a_value.begin(),
-            [](unsigned char a_char) { return static_cast<char>(std::tolower(a_char)); });
-        return a_value;
-    }
-
-    void LoadBool(const char* a_key, const std::string& a_value, bool& a_setting)
-    {
-        const auto parsed = O2BoostRecharge::Config::ParseBool(a_value);
-        if (parsed.has_value()) {
-            a_setting = *parsed;
-        } else {
-            REX::WARN("Ignoring invalid boolean {}={}", a_key, a_value);
-        }
-    }
-
-    void Load()
-    {
-        constexpr auto path = "Data/SFSE/Plugins/O2BoostRecharge.ini";
-        std::ifstream input(path);
-        if (!input) {
-            REX::WARN("Config not found at {}; using defaults", path);
-            return;
-        }
-
-        std::string section;
-        std::string line;
-        while (std::getline(input, line)) {
-            line = Trim(line);
-            if (line.empty() || line.starts_with(';') || line.starts_with('#')) {
-                continue;
-            }
-
-            if (line.front() == '[' && line.back() == ']') {
-                section = Lower(Trim(line.substr(1, line.size() - 2)));
-                continue;
-            }
-
-            const auto separator = line.find('=');
-            if (separator == std::string::npos || section != "general") {
-                continue;
-            }
-
-            auto key = Lower(Trim(line.substr(0, separator)));
-            auto value = Trim(line.substr(separator + 1));
-            if (const auto comment = value.find_first_of(";#"); comment != std::string::npos) {
-                value = Trim(value.substr(0, comment));
-            }
-
-            try {
-                if (key == "fo2perfuel") {
-                    const auto parsed =
-                        O2BoostRecharge::Config::ParseFiniteFloat(value);
-                    if (parsed.has_value() && *parsed > 0.0F) {
-                        o2PerFuel =
-                            std::clamp(*parsed, kMinO2PerFuel, kMaxO2PerFuel);
-                    } else {
-                        REX::WARN("Ignoring non-positive fO2PerFuel={}", value);
-                    }
-                } else if (key == "fminimumo2reservepercent") {
-                    const auto parsed =
-                        O2BoostRecharge::Config::ParseFiniteFloat(value);
-                    if (parsed.has_value()) {
-                        minimumO2ReservePercent =
-                            std::clamp(
-                                *parsed,
-                                0.0F,
-                                kMaxMinimumO2ReservePercent);
-                    } else {
-                        REX::WARN(
-                            "Ignoring invalid fMinimumO2ReservePercent={}",
-                            value);
-                    }
-                } else if (key == "bfreeinsealedorbreathable") {
-                    LoadBool(
-                        "bFreeInSealedOrBreathable",
-                        value,
-                        freeInSealedOrBreathable);
-                } else if (key == "bdisableboostwhensuithidden") {
-                    LoadBool(
-                        "bDisableBoostWhenSuitHidden",
-                        value,
-                        disableBoostWhenSuitHidden);
-                } else if (key == "bdebuglogging") {
-                    LoadBool("bDebugLogging", value, debugLogging);
-                }
-            } catch (...) {
-                REX::WARN("Ignoring invalid config value: {}={}", key, value);
-            }
-        }
-
-        REX::INFO(
-            "Config: fO2PerFuel={}, fMinimumO2ReservePercent={}, "
-            "bFreeInSealedOrBreathable={}, "
-            "bDisableBoostWhenSuitHidden={}, bDebugLogging={}",
-            o2PerFuel,
-            minimumO2ReservePercent,
-            freeInSealedOrBreathable,
-            disableBoostWhenSuitHidden,
-            debugLogging);
-    }
-
-    float O2ReserveFraction()
-    {
-        return minimumO2ReservePercent * 0.01F;
-    }
-}
+#include <atomic>
+#include <cmath>
+#include <cstdint>
 
 namespace GameConditions
 {
@@ -171,7 +43,7 @@ namespace GameConditions
 
         const auto* tasks = SFSE::GetTaskInterface();
         if (!a_condition || !a_player || !tasks) {
-            REX::ERROR(
+            logger::error(
                 "Atmosphere cache not started: Condition={}, Player={}, Tasks={}",
                 static_cast<const void*>(a_condition),
                 static_cast<const void*>(a_player),
@@ -188,7 +60,7 @@ namespace GameConditions
             sealedOrBreathable.store(result, std::memory_order_release);
         });
         environmentTaskInstalled = true;
-        REX::INFO("Started main-thread sealed/breathable atmosphere cache");
+        logger::info("Started main-thread sealed/breathable atmosphere cache");
         return true;
     }
 
@@ -249,6 +121,7 @@ namespace RechargeHook
     }
 
     void LogSample(
+        bool a_enabled,
         float a_requested,
         float a_allowed,
         float a_reserveFraction,
@@ -260,9 +133,9 @@ namespace RechargeHook
         float a_paid,
         float a_rollback)
     {
-        if (Settings::debugLogging &&
+        if (a_enabled &&
             debugSamples.fetch_add(1, std::memory_order_relaxed) < kMaxDebugSamples) {
-            REX::INFO(
+            logger::info(
                 "Recharge sample: requested={}, allowed={}, reserve={}%, capacity={}, "
                 "fuel {} -> {}, O2 {} -> {}, paid={}, rollback={}",
                 a_requested,
@@ -291,7 +164,8 @@ namespace RechargeHook
             return;
         }
 
-        if (Settings::freeInSealedOrBreathable &&
+        const auto settings = O2BoostRecharge::Settings::Get();
+        if (settings.freeInSealedOrBreathable &&
             GameConditions::IsSealedOrBreathable()) {
             original(a_effect, a_target, a_delta, a_overrideActorValue);
             return;
@@ -303,7 +177,7 @@ namespace RechargeHook
         // both use GetPermanentActorValue as the denominator.
         const float oxygenCapacityBefore =
             a_target->GetPermanentActorValue(*oxygen);
-        const float reserveFraction = Settings::O2ReserveFraction();
+        const float reserveFraction = settings.minimumO2ReservePercent * 0.01F;
         const float spendableO2 =
             O2BoostRecharge::Math::SpendableO2(
                 oxygenBefore,
@@ -316,7 +190,7 @@ namespace RechargeHook
                                   O2BoostRecharge::Math::AllowedRecharge(
                                       a_delta,
                                       spendableO2,
-                                      Settings::o2PerFuel) :
+                                      settings.o2PerFuel) :
                                   0.0F;
 
         original(a_effect, a_target, allowed, a_overrideActorValue);
@@ -325,7 +199,7 @@ namespace RechargeHook
         float actualGain = O2BoostRecharge::Math::PositiveIncrease(fuelBefore, fuelAfter);
         const float fundedLimit = O2BoostRecharge::Math::FundedFuelLimit(
             spendableO2,
-            Settings::o2PerFuel);
+            settings.o2PerFuel);
         float rollback = 0.0F;
 
         // Defensive postcondition for another hook changing the requested
@@ -357,7 +231,7 @@ namespace RechargeHook
                     reserveFraction);
             const float requestedCost = O2BoostRecharge::Math::O2Cost(
                 actualGain,
-                Settings::o2PerFuel,
+                settings.o2PerFuel,
                 spendableAtPayment);
 
             if (requestedCost > 0.0F) {
@@ -381,7 +255,7 @@ namespace RechargeHook
             const float unpaidFuel = O2BoostRecharge::Math::UnfundedFuel(
                 actualGain,
                 actualPaid,
-                Settings::o2PerFuel);
+                settings.o2PerFuel);
             if (unpaidFuel > 0.0F) {
                 ModActorValueNoSource(
                     a_target,
@@ -394,6 +268,7 @@ namespace RechargeHook
         }
 
         LogSample(
+            settings.debugLogging,
             a_delta,
             allowed,
             reserveFraction,
@@ -409,7 +284,7 @@ namespace RechargeHook
     bool Install()
     {
         if (installed) {
-            REX::WARN("Recharge hook was already installed");
+            logger::warn("Recharge hook was already installed");
             return true;
         }
 
@@ -420,11 +295,10 @@ namespace RechargeHook
         player = RE::PlayerCharacter::GetSingleton();
 
         const bool atmosphereReady =
-            !Settings::freeInSealedOrBreathable ||
             GameConditions::StartEnvironmentCache(sealedOrBreathableCondition, player);
 
         if (!boostFuel || !oxygen || !player || !atmosphereReady) {
-            REX::ERROR(
+            logger::error(
                 "Recharge hook not installed: BoostpackFuel={}, Oxygen={}, "
                 "SealedOrBreathable={}, Player={}, AtmosphereReady={}",
                 static_cast<const void*>(boostFuel),
@@ -438,7 +312,7 @@ namespace RechargeHook
         REL::Relocation vtable{ RE::VTABLE::ValueModifierEffect[0] };
         original = vtable.write_vfunc(kApplyActorValueSlot, Apply);
         installed = true;
-        REX::INFO(
+        logger::info(
             "Installed player BoostpackFuel recharge hook at ValueModifierEffect slot 0x{:X}",
             kApplyActorValueSlot);
         return true;
@@ -484,6 +358,10 @@ namespace NoMagicBoost
     {
         if (!a_sink) {
             return RE::BSEventNotifyControl::kContinue;
+        }
+
+        if (!O2BoostRecharge::Settings::Get().disableBoostWhenSuitHidden) {
+            return originalOnJumpPress(a_sink, a_event, a_source);
         }
 
         if (player && shouldShowSpacesuit &&
@@ -537,19 +415,26 @@ namespace NoMagicBoost
                                  a_event->heldDownSecs == 0.0F;
         auto current = sequence.load(std::memory_order_acquire);
 
-        // A fresh press also repairs any stale state left by lost focus or a
-        // missing device-release event.
+        // A fresh press repairs stale state left by lost focus or a missing
+        // device-release event.
         if (initialDown) {
             sequence.store(SequenceState::kIdle, std::memory_order_release);
             originalOnButtonEvent(a_handler, a_event);
             return;
         }
 
+        // Finish consuming a sequence that this hook already terminated before
+        // allowing a newly disabled live setting to return control to vanilla.
         if (current == SequenceState::kSuppressedUntilRelease) {
             MarkContinue(a_event);
             if (released) {
                 sequence.store(SequenceState::kIdle, std::memory_order_release);
             }
+            return;
+        }
+
+        if (!O2BoostRecharge::Settings::Get().disableBoostWhenSuitHidden) {
+            originalOnButtonEvent(a_handler, a_event);
             return;
         }
 
@@ -580,13 +465,8 @@ namespace NoMagicBoost
 
     bool Install()
     {
-        if (!Settings::disableBoostWhenSuitHidden) {
-            REX::INFO("Suit-hidden boost blocking is disabled by config");
-            return true;
-        }
-
         if (installed) {
-            REX::WARN("Suit-hidden boost hooks were already installed");
+            logger::warn("Suit-hidden boost hooks were already installed");
             return true;
         }
 
@@ -597,7 +477,7 @@ namespace NoMagicBoost
         player = RE::PlayerCharacter::GetSingleton();
 
         if (!boostpackActive || !shouldShowSpacesuit || !player) {
-            REX::ERROR(
+            logger::error(
                 "Suit-hidden boost hooks not installed: BoostpackActive={}, "
                 "ShouldShowSuit={}, Player={}",
                 static_cast<const void*>(boostpackActive),
@@ -618,7 +498,7 @@ namespace NoMagicBoost
 
         Reset();
         installed = true;
-        REX::INFO(
+        logger::info(
             "Installed player suit-hidden boost hooks at JetpackEffect press "
             "sink slot 0x{:X} and JumpHandler slot 0x{:X}",
             kProcessJumpPressSlot,
@@ -627,34 +507,19 @@ namespace NoMagicBoost
     }
 }
 
-namespace
+namespace O2BoostRecharge::Runtime
 {
-    void MessageCallback(SFSE::MessagingInterface::Message* a_message)
+    bool Install()
     {
-        if (a_message->type == SFSE::MessagingInterface::kPostDataLoad) {
-            Settings::Load();
-            const bool rechargeInstalled = RechargeHook::Install();
-            const bool noMagicInstalled = NoMagicBoost::Install();
-            if (!rechargeInstalled || !noMagicInstalled) {
-                REX::ERROR(
-                    "One or more requested features could not be installed: "
-                    "Recharge={}, NoMagicBoost={}",
-                    rechargeInstalled,
-                    noMagicInstalled);
-            }
+        const bool rechargeInstalled = RechargeHook::Install();
+        const bool noMagicInstalled = NoMagicBoost::Install();
+        if (!rechargeInstalled || !noMagicInstalled) {
+            logger::error(
+                "One or more requested features could not be installed: "
+                "Recharge={}, NoMagicBoost={}",
+                rechargeInstalled,
+                noMagicInstalled);
         }
+        return rechargeInstalled && noMagicInstalled;
     }
-}
-
-SFSE_PLUGIN_LOAD(const SFSE::LoadInterface* a_sfse)
-{
-    SFSE::Init(a_sfse);
-    if (const auto messaging = SFSE::GetMessagingInterface();
-        messaging && messaging->RegisterListener(MessageCallback)) {
-        REX::INFO("Message listener registered");
-        return true;
-    }
-
-    REX::ERROR("Could not register SFSE message listener");
-    return false;
 }

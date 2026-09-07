@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Adds an optional SFSE Menu Framework settings page with live controls and explicit saving.
+
 ## 0.4.1 - 2026-07-16
 
 Initial public release.

@@ -1,7 +1,8 @@
 set_xmakever("3.0.8")
 
+local project_root = os.scriptdir()
+
 if is_plat("windows") then
-    local project_root = os.projectdir()
     add_cxflags(
         "/Brepro",
         "/experimental:deterministic",
@@ -18,6 +19,7 @@ end
 
 local commonlibsf = os.getenv("COMMONLIBSF_PATH") or "lib/commonlibsf"
 local sfsemcp = os.getenv("SFSEMCP_PATH") or "lib/sfse-mcp"
+local staging_dir = path.join(project_root, "build", "staging")
 includes(commonlibsf)
 
 set_project("O2BoostRecharge")
@@ -47,15 +49,29 @@ target("O2BoostRecharge")
     add_includedirs("src", path.join(sfsemcp, "include"))
     set_pcxxheader("src/PCH.h")
     add_installfiles("config/O2BoostRecharge.ini", { prefixdir = "SFSE/Plugins" })
+    add_installfiles("COPYING", "EXCEPTIONS", "THIRD_PARTY_NOTICES.md")
+    add_installfiles("LICENSES/*.txt", { prefixdir = "LICENSES" })
+
+    on_config(function(target)
+        target:set("installdir", staging_dir)
+        target:remove("installfiles", target:symbolfile())
+    end)
+
+    before_build(function(target)
+        assert(path.absolute(target:installdir()) == path.absolute(staging_dir),
+            "build output must remain in the project staging directory")
+    end)
 
 target("RechargeMathTests")
     set_kind("binary")
+    set_default(false)
     add_files("tests/recharge_math_tests.cpp")
     add_headerfiles("src/RechargeMath.h")
     add_includedirs("src")
 
 target("SettingsTests")
     set_kind("binary")
+    set_default(false)
     add_deps("commonlibsf")
     add_files("tests/settings_tests.cpp", "src/Settings.cpp")
     add_headerfiles("src/ConfigParsing.h", "src/Settings.h")

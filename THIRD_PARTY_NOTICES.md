@@ -38,5 +38,6 @@ license. The notice is reproduced in `LICENSES/CommonLibSSE-MIT.txt`.
 - Revision: `a604d76a750939321640d8f6325d90bee858c03f`
 - License: MIT
 - License file: `LICENSES/SFSE-MCP-MIT.txt`
+- Transitive notices: `LICENSES/SFSE-MCP-THIRD-PARTY-NOTICES.txt`
 
 No files, code, or assets from Real O2 or Magic Boost Disabler are included.

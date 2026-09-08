@@ -114,9 +114,8 @@ The validated dependency revisions are:
 - spdlog v1.16.0 (`486b55554f11c9cccc913e11a87085b2a91f706f`)
 
 The build requires Xmake 3.0.8 or newer, MSVC with C++23 support, and the Windows
-SDK. Set `SFSEMCP_PATH` to the pinned SFSE-MCP checkout until it is available
-as the repository's `lib/sfse-mcp` submodule. See [SOURCE.md](SOURCE.md) for
-corresponding-source details.
+SDK. `SFSEMCP_PATH` can override the pinned `lib/sfse-mcp` checkout. See
+[SOURCE.md](SOURCE.md) for corresponding-source details.
 
 ## License
 

@@ -1,6 +1,7 @@
 #include "Settings.h"
 
 #include <atomic>
+#include <barrier>
 #include <cstdlib>
 #include <iostream>
 #include <thread>
@@ -38,16 +39,18 @@ int main()
     const Settings::Values second{7.0F, 80.0F, false, true, false};
     Settings::Set(first);
 
-    std::atomic_bool done = false;
+    constexpr std::size_t kIterations = 100000;
+    std::barrier startGate(3);
     std::atomic_bool mixed = false;
     std::thread writer([&] {
-        for (std::size_t index = 0; index < 100000; ++index) {
+        startGate.arrive_and_wait();
+        for (std::size_t index = 0; index < kIterations; ++index) {
             Settings::Set((index & 1U) == 0 ? second : first);
         }
-        done.store(true, std::memory_order_release);
     });
     std::thread reader([&] {
-        while (!done.load(std::memory_order_acquire)) {
+        startGate.arrive_and_wait();
+        for (std::size_t index = 0; index < kIterations; ++index) {
             const auto value = Settings::Get();
             if (!Matches(value, first) && !Matches(value, second)) {
                 mixed.store(true, std::memory_order_relaxed);
@@ -56,6 +59,7 @@ int main()
         }
     });
 
+    startGate.arrive_and_wait();
     writer.join();
     reader.join();
     if (mixed.load(std::memory_order_relaxed)) {

@@ -1,4 +1,4 @@
-# Release verification manifest
+# Release verification manifest (v0.4.1)
 
 - Public name: Boostpacks Use O2
 - Internal plugin name: O2BoostRecharge

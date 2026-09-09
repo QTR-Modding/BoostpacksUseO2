@@ -8,7 +8,7 @@ exact revisions:
 - [commonlib-shared](https://github.com/libxse/commonlib-shared) commit
   `40bdbcaf8fa691ee6daadc7b5cea8d43f794bef4`
 - [SFSE-MCP](https://github.com/QTR-Modding/SFSE-MCP) commit
-  `a604d76a750939321640d8f6325d90bee858c03f`
+  `17f3c1e9cc432c00a6e357d71cc207a2c45376de`
 - [spdlog](https://github.com/gabime/spdlog) v1.16.0, commit
   `486b55554f11c9cccc913e11a87085b2a91f706f`
 

@@ -35,7 +35,7 @@ license. The notice is reproduced in `LICENSES/CommonLibSSE-MIT.txt`.
 ## SFSE-MCP
 
 - Project: <https://github.com/QTR-Modding/SFSE-MCP>
-- Revision: `a604d76a750939321640d8f6325d90bee858c03f`
+- Revision: `17f3c1e9cc432c00a6e357d71cc207a2c45376de`
 - License: MIT
 - License file: `LICENSES/SFSE-MCP-MIT.txt`
 - Transitive notices: `LICENSES/SFSE-MCP-THIRD-PARTY-NOTICES.txt`

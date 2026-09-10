@@ -23,7 +23,7 @@ local staging_dir = path.join(project_root, "build", "staging")
 includes(commonlibsf)
 
 set_project("O2BoostRecharge")
-set_version("0.5.0")
+set_version("1.0.0")
 set_license("GPL-3.0-or-later")
 set_languages("c++23")
 set_warnings("allextra")

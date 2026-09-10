@@ -1,6 +1,13 @@
 Third-Party Notices
 ===================
 
+CLibUtilsQTR signing module
+--------------------------
+Source: https://github.com/QTR-Modding/CLibUtilsQTR
+Copyright (c) 2025-2026 Quantumyilmaz, SkyrimThiago, RavenKZP
+License: MIT (permission and warranty terms below).
+The standalone SDK embeds the signing module and its license.
+
 Dear ImGui
 ----------
 

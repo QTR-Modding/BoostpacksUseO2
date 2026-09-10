@@ -46,7 +46,7 @@ target("O2BoostRecharge")
 
     add_files("src/**.cpp")
     add_headerfiles("src/**.h")
-    add_includedirs("src", path.join(sfsemcp, "include"))
+    add_includedirs("src", path.join(sfsemcp, "include"), path.join(sfsemcp, "lib/clib-utils-qtr/include"))
     set_pcxxheader("src/PCH.h")
     add_installfiles("config/O2BoostRecharge.ini", { prefixdir = "SFSE/Plugins" })
     add_installfiles("COPYING", "EXCEPTIONS", "THIRD_PARTY_NOTICES.md")

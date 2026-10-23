@@ -20,7 +20,6 @@ namespace GameConditions
 
     std::atomic_bool sealedOrBreathable = false;
     RE::BGSConditionForm* environmentCondition = nullptr;
-    RE::PlayerCharacter* player = nullptr;
     bool environmentTaskInstalled = false;
 
     bool Evaluate(RE::BGSConditionForm* a_condition, RE::TESObjectREFR* a_subject)
@@ -52,9 +51,9 @@ namespace GameConditions
         }
 
         environmentCondition = a_condition;
-        player = a_player;
         sealedOrBreathable.store(false, std::memory_order_release);
         tasks->AddPermanentTask([] {
+            auto* const player = RE::PlayerCharacter::GetSingleton();
             const bool result = player && player->parentCell &&
                                 Evaluate(environmentCondition, player);
             sealedOrBreathable.store(result, std::memory_order_release);
@@ -90,7 +89,6 @@ namespace RechargeHook
     RE::ActorValueInfo* boostFuel = nullptr;
     RE::ActorValueInfo* oxygen = nullptr;
     RE::BGSConditionForm* sealedOrBreathableCondition = nullptr;
-    RE::PlayerCharacter* player = nullptr;
     std::atomic_uint32_t debugSamples = 0;
     bool installed = false;
 
@@ -157,6 +155,7 @@ namespace RechargeHook
             return;
         }
 
+        auto* const player = RE::PlayerCharacter::GetSingleton();
         if (a_target != player ||
             ResolveActorValue(a_effect, a_overrideActorValue) != boostFuel ||
             !std::isfinite(a_delta) || a_delta <= 0.0F) {
@@ -292,7 +291,7 @@ namespace RechargeHook
         oxygen = RE::TESForm::LookupByID<RE::ActorValueInfo>(0x000002D5);
         sealedOrBreathableCondition =
             RE::TESForm::LookupByID<RE::BGSConditionForm>(0x002FAA06);
-        player = RE::PlayerCharacter::GetSingleton();
+        auto* const player = RE::PlayerCharacter::GetSingleton();
 
         const bool atmosphereReady =
             GameConditions::StartEnvironmentCache(sealedOrBreathableCondition, player);
@@ -342,7 +341,6 @@ namespace NoMagicBoost
     REL::Relocation<on_button_event_t> originalOnButtonEvent;
     RE::ActorValueInfo* boostpackActive = nullptr;
     RE::BGSConditionForm* shouldShowSpacesuit = nullptr;
-    RE::PlayerCharacter* player = nullptr;
     std::atomic<SequenceState> sequence = SequenceState::kIdle;
     bool installed = false;
 
@@ -364,6 +362,7 @@ namespace NoMagicBoost
             return originalOnJumpPress(a_sink, a_event, a_source);
         }
 
+        auto* const player = RE::PlayerCharacter::GetSingleton();
         if (player && shouldShowSpacesuit &&
             !GameConditions::Evaluate(shouldShowSpacesuit, player)) {
             // Veto only JetpackEffect's sink. The event dispatcher continues
@@ -397,6 +396,7 @@ namespace NoMagicBoost
             return;
         }
 
+        auto* const player = RE::PlayerCharacter::GetSingleton();
         if (!player || !shouldShowSpacesuit || !boostpackActive) {
             Reset();
             originalOnButtonEvent(a_handler, a_event);
@@ -474,7 +474,7 @@ namespace NoMagicBoost
             RE::TESForm::LookupByID<RE::ActorValueInfo>(0x0002466E);
         shouldShowSpacesuit =
             RE::TESForm::LookupByID<RE::BGSConditionForm>(0x00194ABF);
-        player = RE::PlayerCharacter::GetSingleton();
+        auto* const player = RE::PlayerCharacter::GetSingleton();
 
         if (!boostpackActive || !shouldShowSpacesuit || !player) {
             logger::error(

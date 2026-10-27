@@ -110,7 +110,7 @@ The validated dependency revisions are:
 
 - CommonLibSF `84f8589b15a6d588d28da16baa7459a1fc414ea7`
 - commonlib-shared `40bdbcaf8fa691ee6daadc7b5cea8d43f794bef4`
-- SFSE-MCP `abeee13a366d2a288cb682037c6ec5d577bba810`
+- SFSE-MCP `5bf93bf2b22f2c70c2c67f9b6cefa353d164f85c`
 - spdlog v1.16.0 (`486b55554f11c9cccc913e11a87085b2a91f706f`)
 
 The build requires Xmake 3.0.8 or newer, MSVC with C++23 support, and the Windows

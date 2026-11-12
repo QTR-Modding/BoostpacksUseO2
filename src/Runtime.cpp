@@ -8,28 +8,13 @@
 
 namespace GameConditions
 {
-    // Starfield 1.16.244 native ConditionForm.IsTrue implementation. It builds
-    // the runtime's 0x70-byte parameter block and evaluates the complete list,
-    // avoiding stale CommonLibSF layouts for both structures.
-    using is_true_t = bool (*)(
-        void*,
-        std::uint32_t,
-        RE::BGSConditionForm*,
-        RE::TESObjectREFR*,
-        RE::TESObjectREFR*);
-
     std::atomic_bool sealedOrBreathable = false;
     RE::BGSConditionForm* environmentCondition = nullptr;
     bool environmentTaskInstalled = false;
 
     bool Evaluate(RE::BGSConditionForm* a_condition, RE::TESObjectREFR* a_subject)
     {
-        if (!a_condition || !a_subject) {
-            return false;
-        }
-
-        static REL::Relocation<is_true_t> isTrue{ REL::ID(114781) };
-        return isTrue(nullptr, 0, a_condition, a_subject, nullptr);
+        return a_condition && a_subject && a_condition->IsTrue(a_subject, nullptr);
     }
 
     bool StartEnvironmentCache(
@@ -54,7 +39,7 @@ namespace GameConditions
         sealedOrBreathable.store(false, std::memory_order_release);
         tasks->AddPermanentTask([] {
             auto* const player = RE::PlayerCharacter::GetSingleton();
-            const bool result = player && player->parentCell &&
+            const bool result = player && player->ParentCell() &&
                                 Evaluate(environmentCondition, player);
             sealedOrBreathable.store(result, std::memory_order_release);
         });
@@ -74,39 +59,17 @@ namespace RechargeHook
     // Starfield 1.16.244 ValueModifierEffect vtable slot 0x1E. The fourth
     // argument can override the effect's ActorValueInfo stored at +0x98.
     using function_t = void (*)(void*, RE::Actor*, float, RE::ActorValueInfo*);
-    using mod_actor_value_no_source_t = void (*)(
-        RE::ActorValueOwner*,
-        RE::ACTOR_VALUE_MODIFIER,
-        const RE::ActorValueInfo&,
-        float);
 
     constexpr std::size_t kApplyActorValueSlot = 0x1E;
-    constexpr std::size_t kModActorValueNoSourceSlot = 0x07;
     constexpr std::ptrdiff_t kEffectActorValueOffset = 0x98;
     constexpr std::uint32_t kMaxDebugSamples = 120;
 
-    REL::Relocation<function_t> original;
+    function_t original{};
     RE::ActorValueInfo* boostFuel = nullptr;
     RE::ActorValueInfo* oxygen = nullptr;
     RE::BGSConditionForm* sealedOrBreathableCondition = nullptr;
     std::atomic_uint32_t debugSamples = 0;
     bool installed = false;
-
-    void ModActorValueNoSource(
-        RE::Actor* a_target,
-        RE::ACTOR_VALUE_MODIFIER a_modifier,
-        const RE::ActorValueInfo& a_info,
-        float a_delta)
-    {
-        // The CommonLibSF overloads compile to the opposite vtable entries on
-        // this revision. Call the runtime-verified no-source slot directly.
-        // Starfield's native queued O2-cost path uses this same slot (0x07).
-        auto* owner = static_cast<RE::ActorValueOwner*>(a_target);
-        auto* vtable = *reinterpret_cast<std::uintptr_t**>(owner);
-        auto function = reinterpret_cast<mod_actor_value_no_source_t>(
-            vtable[kModActorValueNoSourceSlot]);
-        function(owner, a_modifier, a_info, a_delta);
-    }
 
     RE::ActorValueInfo* ResolveActorValue(void* a_effect, RE::ActorValueInfo* a_override)
     {
@@ -175,7 +138,7 @@ namespace RechargeHook
         // Starfield's GetValuePercent and ObjectReference.GetValuePercentage
         // both use GetPermanentActorValue as the denominator.
         const float oxygenCapacityBefore =
-            a_target->GetPermanentActorValue(*oxygen);
+            a_target->GetActorValueOwner().GetPermanentActorValue(*oxygen);
         const float reserveFraction = settings.minimumO2ReservePercent * 0.01F;
         const float spendableO2 =
             O2BoostRecharge::Math::SpendableO2(
@@ -205,8 +168,7 @@ namespace RechargeHook
         // delta: the gain cannot exceed what pre-update O2 could fund.
         if (actualGain > fundedLimit + O2BoostRecharge::Math::kEpsilon) {
             const float excess = actualGain - fundedLimit;
-            ModActorValueNoSource(
-                a_target,
+            a_target->GetActorValueOwner().ModActorValue(
                 RE::ACTOR_VALUE_MODIFIER::kDamage,
                 *boostFuel,
                 -excess);
@@ -222,7 +184,7 @@ namespace RechargeHook
             // O2 or its permanent capacity while fuel was being applied.
             const float oxygenAtPayment = a_target->GetActorValue(*oxygen);
             const float oxygenCapacityAtPayment =
-                a_target->GetPermanentActorValue(*oxygen);
+                a_target->GetActorValueOwner().GetPermanentActorValue(*oxygen);
             const float spendableAtPayment =
                 O2BoostRecharge::Math::SpendableO2(
                     oxygenAtPayment,
@@ -235,9 +197,8 @@ namespace RechargeHook
 
             if (requestedCost > 0.0F) {
                 // Negative kDamage is Starfield's resource-debit direction;
-                // use the runtime-validated no-source helper above.
-                ModActorValueNoSource(
-                    a_target,
+                // use the no-source actor value operation.
+                a_target->GetActorValueOwner().ModActorValue(
                     RE::ACTOR_VALUE_MODIFIER::kDamage,
                     *oxygen,
                     -requestedCost);
@@ -256,8 +217,7 @@ namespace RechargeHook
                 actualPaid,
                 settings.o2PerFuel);
             if (unpaidFuel > 0.0F) {
-                ModActorValueNoSource(
-                    a_target,
+                a_target->GetActorValueOwner().ModActorValue(
                     RE::ACTOR_VALUE_MODIFIER::kDamage,
                     *boostFuel,
                     -unpaidFuel);
@@ -308,8 +268,11 @@ namespace RechargeHook
             return false;
         }
 
-        REL::Relocation vtable{ RE::VTABLE::ValueModifierEffect[0] };
-        original = vtable.write_vfunc(kApplyActorValueSlot, Apply);
+        const auto table = SF1::ResolveID(RE::VTABLE::ValueModifierEffect.value);
+        if (!SF1::Hooks::HookVTable(table, kApplyActorValueSlot, Apply, original)) {
+            logger::error("Could not install the boostpack fuel recharge hook");
+            return false;
+        }
         installed = true;
         logger::info(
             "Installed player BoostpackFuel recharge hook at ValueModifierEffect slot 0x{:X}",
@@ -337,8 +300,8 @@ namespace NoMagicBoost
     constexpr std::size_t kProcessJumpPressSlot = 0x01;
     constexpr std::size_t kOnButtonEventSlot = 0x08;
 
-    REL::Relocation<on_jump_press_t> originalOnJumpPress;
-    REL::Relocation<on_button_event_t> originalOnButtonEvent;
+    on_jump_press_t originalOnJumpPress{};
+    on_button_event_t originalOnButtonEvent{};
     RE::ActorValueInfo* boostpackActive = nullptr;
     RE::BGSConditionForm* shouldShowSpacesuit = nullptr;
     std::atomic<SequenceState> sequence = SequenceState::kIdle;
@@ -486,15 +449,18 @@ namespace NoMagicBoost
             return false;
         }
 
-        REL::Relocation jetpackPressSinkVtable{ REL::ID(448594) };
-        originalOnJumpPress =
-            jetpackPressSinkVtable.write_vfunc(
-                kProcessJumpPressSlot,
-                OnJumpPress);
-
-        REL::Relocation jumpHandlerVtable{ REL::ID(433587) };
-        originalOnButtonEvent =
-            jumpHandlerVtable.write_vfunc(kOnButtonEventSlot, OnButtonEvent);
+        const auto pressTable = SF1::ResolveID(RE::VTABLE::JetpackJumpPress.value);
+        const auto buttonTable = SF1::ResolveID(RE::VTABLE::PlayerControlsJumpHandler.value);
+        if (!SF1::Hooks::HookVTable(pressTable, kProcessJumpPressSlot, OnJumpPress, originalOnJumpPress)) {
+            logger::error("Could not install the suit-hidden jump press hook");
+            return false;
+        }
+        if (!SF1::Hooks::HookVTable(buttonTable, kOnButtonEventSlot, OnButtonEvent, originalOnButtonEvent)) {
+            on_jump_press_t previous{};
+            const bool restored = SF1::Hooks::HookVTable(pressTable, kProcessJumpPressSlot, originalOnJumpPress, previous);
+            logger::error("Could not install the suit-hidden button hook; jump press restored: {}", restored);
+            return false;
+        }
 
         Reset();
         installed = true;
